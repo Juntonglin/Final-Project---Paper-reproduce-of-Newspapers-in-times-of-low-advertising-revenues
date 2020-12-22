@@ -2,18 +2,20 @@
 title: "Final Project - Paper reproduce of Newspapers in times of low advertising revenues"
 author: "Juntong Lin"
 date: "12/18/2020"
-output: github_document
-always_allow_html: true
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
 ---
 # Abstract
-In the original paper, the author had three studies. Firstly, he analyzed the relationship between advertising revenues and newspapers’ choices regarding the size of their newsroom and the quantity of news to produce, and their pricing strategies. Secondly, he studied the evidence that national newspapers decreased their provision of hard news following the introduction of television advertising. Finally, he finds that national newspapers’ readership became less educated and affluent following the decrease in subscription prices and change in content. (Angelucci, Charles, Julia. 2019) In this study, I would turn the author's original Stata environment code into R code, run the results, reach my own conclusion, and compare and contrast my studies with the author’s.
+In the original paper, the author had three studies. Firstly, he analyzed the relationship between advertising revenues and newspapers' choices regarding the size of their newsroom and the quantity of news to produce, and their pricing strategies. Secondly, he studied the evidence that national newspapers decreased their provision of hard news following the introduction of television advertising. Finally, he finds that national newspapers' readership became less educated and affluent following the decrease in subscription prices and change in content. (Angelucci, Charles, Julia. 2019) In this study, I would turn the author's original Stata environment code into R code, run the results, reach my own conclusion, and compare and contrast my studies with the author's.
 
 # Keywords : Newspaper, Advertising, Media, Pricing, Production
 
 # Introduction
-In recent years, as newspaper companies steadily decreased the employment of journalists, there are concerns about the industry’s ability to produce high-quality information in smaller newsrooms, fewer reporters, and increased reliance on wire services. However, all these difficulties are largely due to their low advertising revenues. Since the development of new media, the newspaper industry enters a difficult advertising time. 
+In recent years, as newspaper companies steadily decreased the employment of journalists, there are concerns about the industry's ability to produce high-quality information in smaller newsrooms, fewer reporters, and increased reliance on wire services. However, all these difficulties are largely due to their low advertising revenues. Since the development of new media, the newspaper industry enters a difficult advertising time. 
 
-In the original article, the author models the consequences on newspapers’ content and prices of a reduction in advertising revenues. He builds a dataset on French newspapers between 1960 and 1974. He organized his study in such ways: develops a two-sided model of the newspaper industry; introduces a new dataset for this study and provides descriptive statistics; discusses the historical context and provides anecdotal evidence regarding its impact on the newspaper industry; and estimate the relationship between newspapers’ reliance on advertising revenues and their pricing and quality choices using a difference-in-differences analysis. The specific methodology would be discussed as the article moving forward.
+In the original article, the author models the consequences on newspapers' content and prices of a reduction in advertising revenues. He builds a dataset on French newspapers between 1960 and 1974. He organized his study in such ways: develops a two-sided model of the newspaper industry; introduces a new dataset for this study and provides descriptive statistics; discusses the historical context and provides anecdotal evidence regarding its impact on the newspaper industry; and estimate the relationship between newspapers' reliance on advertising revenues and their pricing and quality choices using a difference-in-differences analysis. The specific methodology would be discussed as the article moving forward.
 
 
 # Code and Results
@@ -360,10 +362,11 @@ From Figure 5c, the number of hours of programming broadcast is flat for the fir
 Figure 5d shows a linear increasing trend. Figure 5e shows that the number of journalists working for the ORTF increased linearly throughout the period, and such trend would be important in author's next section of study. 
 
 # Methodology
-After building several models in previous section, the author start to study empirically the size of newsrooms, the pricing, the readership and outcomes are affected by newspapers’ reliance on advertising revenues as the introduction of television. He uses panel data to compute DiD estimates of the effect of the introduction of advertising on television. He assumes that the negative shock on advertising revenues mostly affected national daily newspapers and to a lower extent local daily newspapers. He uses national newspapers as “treated group” and local newspapers as “control group. Here is the equation: 
+After building several models in previous section, the author start to study empirically the size of newsrooms, the pricing, the readership and outcomes are affected by newspapers' reliance on advertising revenues as the introduction of television. He uses panel data to compute DiD estimates of the effect of the introduction of advertising on television. He assumes that the negative shock on advertising revenues mostly affected national daily newspapers and to a lower extent local daily newspapers. He uses national newspapers as "treated group" and local newspapers as "control group". Here is the equation: 
 
-$$yn,t = α + β1(Dafter ×Dnational news) + λn + γt + εn,t $$
-n indexes newspapers and t indexes years (from 1960 to 1974). λn is fixed effects for newspaper, γt is time dummies, and εn,t is a newspaper-year shock. Dnationalnews is an indicator variable for national newspapers and Dafter is a time dummy that switches on for observations post 1967. The variable yn,t is the outcome of interest, while β1 is the coefficient of interest. β1 measures the annual effect for national newspapers of the introduction of advertising on television compared to the general evolution of  dependent variable for local newspapers. There is a key assumption for this method, such that the trends of the dependent variables would be the same for both newspapers in the absence of the treatment. 
+$$yn,t = a + \beta_1(Dafter ×Dnational news) + \Lambda n + \Gamma t + \Omega n,t$$
+
+n indexes newspapers and t indexes years (from 1960 to 1974). Lambda n is fixed effects for newspaper, Gamma t is time dummies, and Omega n,t is a newspaper-year shock. Dnationalnews is an indicator variable for national newspapers and Dafter is a time dummy that switches on for observations post 1967. The variable yn,t is the outcome of interest, while beta_1 is the coefficient of interest. beta_1 measures the annual effect for national newspapers of the introduction of advertising on television compared to the general evolution of  dependent variable for local newspapers. There is a key assumption for this method, such that the trends of the dependent variables would be the same for both newspapers in the absence of the treatment. 
 
 # Recreate Table 3-6
 Table 3-7 are showing the results using the above method. Table 3 is the effect on the advertising side of the market. Table 4 is the effect on the reader side of the market. Table 5 is the effect on the newspaper quality. Table 6 is the effect on readership extent. 
@@ -433,7 +436,7 @@ cbind(panel_reg("R_sh_pcs_agri_ipo", data),
 ```
 Table 3 shows that the shock leads to a 24 percent decrease in the advertising revenues of national newspapers compared to the revenues of local newspapers. It also obtain a 14 percent decrease following the shock when using the total advertising revenues normalized by circulation; the decrease would be stronger when considering the list price measure of advertising prices. However, there is no significant change in the quantity of advertising.
 
-Table 4 shows the advertising revenues affected newspapers’ pricing choices and their circulation. There is an 11 percent decrease in the subscription price of national newspapers compared to the subscription price of local newspapers following the introduction of advertising on television.
+Table 4 shows the advertising revenues affected newspapers' pricing choices and their circulation. There is an 11 percent decrease in the subscription price of national newspapers compared to the subscription price of local newspapers following the introduction of advertising on television.
 
 Two features of newspapers are used in this study as measures of newspaper quality: the number of journalists (newshole) and the payroll. As shown in Table 5, advertising on television leads to a 21 percent decrease in the number of journalists and no effect on the average payroll.
 
@@ -545,7 +548,135 @@ result3 %>%
   geom_hline(yintercept = 0, color = "red") +
   labs(title = "Panel C. Subscription price")
 
+result4 <- formula(ln_qtotal ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
 
+result4 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result4 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel D. Circulation")
+
+result5 <- formula(ln_nb_journ ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result5 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result5 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel E. Number of journalists")
+
+result6 <- formula(ln_news_hole ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result6 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result6 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel F. Newshole")
+
+result7 <- formula(R_sh_pcs_employes_ipo ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result7 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result7 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel G. Readership: Percent employees")
+
+result8 <- formula(R_sh_pcs_agri_ouvriers_ipo ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result8 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result8 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel H. Readership: Percent farmers and laborers")
 ```
 From all these boxplots, there are obvious decrease of median for Advertising revenues, Advertising price, Subscription price, Number of journalists, and Readership: Percent employees. There is no significant change of median for Circulation and Newshole. And there is an increase of median in Readership: Percent farmers and laborers. It is interesting that there is a decrease in the number of journalists employed, but no change in the quantity of news. There comes to an induction that national newspapers drop in advertising revenues by decreasing the quality of content or by producing fewer hard news. 
 
@@ -554,8 +685,8 @@ In this paper reproduction study, I successfully rebuild all the tables and figu
 
 The newspaper industry is in a severe crisis following the advent of new media. An obvious challenge is that less advertisers would choose to cooperate with newspapers, comparing to the strong publicity capacity of new media. A drop in advertising revenues induces the newspaper to lower the quality of content, a decrease in the subscription price, or changes the composition of the readership. It is also shown that the introduction of advertising of television leads to the decrease in the number of journalists employed. Under the vicious spiral of fewer journalists employed - lower quality of content - fewer readers - fewer inverstments, the traditional newspaper industry would disappear in the future. 
 
-However, there are still some weakness in this study. Figure 1 may be not good enough. As newspaper advertising revenues and number of daily newspaper journalists actually have different units, they should not be simply put together. Also, some of the lenes are not authoritative enough, such as the measurements of newspaper content quality, which need us to search for more information.
+However, there are still some weakness in this study. Figure 1 may be not good enough. As newspaper advertising revenues and number of daily newspaper journalists actually have different units, they should not be simply put together. Also, some of the lenes are not authoritative enough, such as the measurements of newspaper content quality, which need us to search for more information. And finally for Figure 6a, there exist a little mistake. It should be "0 0 0 id_news 0 1960 1974" in his code, but he type it as "0 1 0". Originally, the Advertising revenues should be below zero at the left side of the vline. Though the overall trend is similar, there is still some differences. 
 
 # Reference
-[1]Angelucci, Charles, and Julia Cagé. 2019. "Newspapers in Times of Low Advertising Revenues." American Economic Journal: Microeconomics, 11 (3): 319- 64. Available at:
+[1]Angelucci, Charles, and Julia Cage. 2019. "Newspapers in Times of Low Advertising Revenues." American Economic Journal: Microeconomics, 11 (3): 319- 64. Available at:
 <DOI: 10.1257/mic.20170306>
