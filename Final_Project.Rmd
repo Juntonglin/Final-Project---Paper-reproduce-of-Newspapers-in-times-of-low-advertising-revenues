@@ -1,0 +1,561 @@
+---
+title: "Final Project - Paper reproduce of Newspapers in times of low advertising revenues"
+author: "Juntong Lin"
+date: "12/18/2020"
+output: github_document
+always_allow_html: true
+---
+# Abstract
+In the original paper, the author had three studies. Firstly, he analyzed the relationship between advertising revenues and newspapers’ choices regarding the size of their newsroom and the quantity of news to produce, and their pricing strategies. Secondly, he studied the evidence that national newspapers decreased their provision of hard news following the introduction of television advertising. Finally, he finds that national newspapers’ readership became less educated and affluent following the decrease in subscription prices and change in content. (Angelucci, Charles, Julia. 2019) In this study, I would turn the author's original Stata environment code into R code, run the results, reach my own conclusion, and compare and contrast my studies with the author’s.
+
+# Keywords : Newspaper, Advertising, Media, Pricing, Production
+
+# Introduction
+In recent years, as newspaper companies steadily decreased the employment of journalists, there are concerns about the industry’s ability to produce high-quality information in smaller newsrooms, fewer reporters, and increased reliance on wire services. However, all these difficulties are largely due to their low advertising revenues. Since the development of new media, the newspaper industry enters a difficult advertising time. 
+
+In the original article, the author models the consequences on newspapers’ content and prices of a reduction in advertising revenues. He builds a dataset on French newspapers between 1960 and 1974. He organized his study in such ways: develops a two-sided model of the newspaper industry; introduces a new dataset for this study and provides descriptive statistics; discusses the historical context and provides anecdotal evidence regarding its impact on the newspaper industry; and estimate the relationship between newspapers’ reliance on advertising revenues and their pricing and quality choices using a difference-in-differences analysis. The specific methodology would be discussed as the article moving forward.
+
+
+# Code and Results
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+```{r packages}
+# Load packages
+#install.packages("haven")
+#install.packages("tidyverse")
+#install.packages("kableExtra")
+#install.packages("plm")
+#install.packages("lmtest")
+#install.packages("colorspace")
+library(haven) # load the stata data file
+library(tidyverse)
+library(kableExtra) # create tables
+library(plm) # fixed effect panel regression
+library(lmtest) # produce clustered standard error
+library(colorspace)
+```
+
+# Recreate Figure 1
+This figure represents the evolution of newspaper advertising revenues (blue line) and of the number of daily newspaper journalists (red line) in the United States between 1980 and 2015. The author want to use this figure to show the trend of newspaper advertising revenues under such rapid technological change, as well as compare its trend with the newspaper journalists changing trend. 
+```{r Figure1}
+# Plot two axis ggplot
+Figure1_data <- read_dta("116438-V1/dta/Angelucci_Cage_AEJMicro_Descriptive_evidence_US.dta")
+
+# Plot two axis ggplot
+ggplot(Figure1_data, aes(x=year)) +
+  geom_line(aes(y=newspapers, color = "blue")) + 
+  geom_line(aes(y=nb_journ/(6/5), color = "red")) + # Divide by 6/5 to get the same range
+  scale_y_continuous(
+    # Features of the first axis
+    name = sjlabelled::get_label(Figure1_data)[3],
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~.*(6/5), name=sjlabelled::get_label(Figure1_data)[4])
+  ) + 
+  scale_x_continuous(breaks = seq(1980,2016,by=2)) +
+  scale_color_identity(name = "",
+                    breaks = c("blue", "red"),
+                    labels = c("Newspapers' advertising revenues", "Number of daily newspaper journalists"),
+                    guide = "legend") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = c(.5, .1))
+```
+From the figure 1 above, the Newspapers' advertising revenues had an increase from 1980 to 2000, a fluctuation from 2000 to 2008, and a huge decrease since 2008. The Number of daily newspaper journalists has a similar increasing or decreasing trend as the Newspapers' advertising revenues. 
+
+## Replication for Tables
+```{r data}
+data <- read_dta("116438-V1/dta/Angelucci_Cage_AEJMicro_dataset.dta") %>%
+  # For descriptive statistics, normalize revenues, expenditures, etc. in million euros 
+  mutate_at(vars(rtotal_cst, ra_cst, rs_cst, etotal_cst, profit_cst), funs(./1000000))
+
+
+# Change the labels
+attributes(data$rs_cst)$label = "Revenues from sales (million €)"
+attributes(data$ra_cst)$label = "Revenues from advertising (million €)"
+attributes(data$rtotal_cst)$label = "Total revenues (million €)"
+attributes(data$etotal_cst)$label = "Total expenditures (million €)"
+attributes(data$profit_cst)$label = "Profit (million €)"
+
+```
+
+# Create the table 1 and 2
+At the first step, the author mainly builds new datasets for this study, and describe the newspaper industry characteristics. The French daily newspaper industry is divided into two types: the local daily newspaper industry(PQR), and the national daily newspaper industry(PQN). Tables 1 & 2 summarize the statistics of newspaper prices, revenues, the number of journalists, circulation, and content for both the daily newspaper industry.
+```{r table1&2}
+# Create table 1 Summary Statistics: National Daily Newspapers
+table1 <- data %>%
+  # filter local == 0
+  filter(local == 0) %>%
+  # select po_cst ps_cst ads_p4_cst rtotal_cst ra_cst rs_cst ra_s nb_journ qtotal qs_s pages news_hole ads_q 
+  select(c(po_cst, ps_cst, ads_p4_cst, rtotal_cst, ra_cst, rs_cst, ra_s, nb_journ, qtotal, qs_s, pages, news_hole, ads_q))
+
+# Make the label the name
+names(table1) = sjlabelled::get_label(table1)
+
+table1 <- table1 %>%
+  # Make it a long table
+  pivot_longer(everything(), names_to = "type", values_to = "value") %>%
+  # Fix the order of the type
+  mutate(type = factor(type, unique(type))) %>%
+  # Remove nas
+  na.omit() %>%
+  # Group each variable type
+  group_by(type) %>%
+  # Calculate the summary statistics
+  summarise_all(list(Mean = mean, Median = median, SD = sd, Min = min, Max = max, Observations = ~n()))
+
+table1 %>%
+  mutate_if(is.numeric, ~sprintf("%15.1f", .)) %>%
+  kable(align = "c", caption = "Table 1—Summary Statistics: National Daily Newspapers") %>%
+        kable_styling("striped", full_width = F)
+
+
+# Create table 2 Summary Statistics: Local Daily Newspapers
+table2 <- data %>%
+  # filter local == 1
+  filter(local == 1) %>%
+  # select po_cst ps_cst ads_p4_cst rtotal_cst ra_cst rs_cst ra_s nb_journ qtotal qs_s pages news_hole ads_q 
+  select(c(po_cst, ps_cst, ads_p4_cst, rtotal_cst, ra_cst, rs_cst, ra_s, nb_journ, qtotal, qs_s, pages, news_hole, ads_q))
+
+# Make the label the name
+names(table2) = sjlabelled::get_label(table2)
+
+table2 <- table2 %>%
+  # Make it a long table
+  pivot_longer(everything(), names_to = "type", values_to = "value") %>%
+  # Fix the order of the type
+  mutate(type = factor(type, unique(type))) %>%
+  # Remove nas
+  na.omit() %>%
+  # Group each variable type
+  group_by(type) %>%
+  # Calculate the summary statistics
+  summarise_all(list(Mean = mean, Median = median, SD = sd, Min = min, Max = max, Observations = ~n()))
+
+table2 %>%
+  mutate_if(is.numeric, ~sprintf("%15.1f", .)) %>%
+  kable(align = "c", caption = "Table 2—Summary Statistics: Local Daily Newspapers") %>%
+        kable_styling("striped", full_width = F)
+```
+
+# Recreate Figure 2
+The figure shows, in year 1967 and 1974, the value of advertising revenues for local daily newspapers, national daily newspapers, and televisions in million (constant 2014) euros. The author uses this figure to build a sense of the effect of the introduction of television advertising on the advertising revenues of local and national daily newspapers.
+```{r Figure2}
+Figure2_data <- read_dta("116438-V1/dta/Angelucci_Cage_AEJMicro_Descriptive_evidence_advertising_industry.dta") %>%
+  select(c(year, adtv, adpqn, adpqr))
+
+# Plot bar ggplot
+Figure2_data %>%
+  pivot_longer(-year, names_to = "Type", values_to = "Euro") %>%
+  ggplot(aes(Type, Euro, fill = factor(year))) +
+  geom_bar(stat="identity", position=position_dodge())+ 
+  theme_minimal() + 
+  labs(x = "")+
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+From the figure 2 above, total advertising revenues for national daily newspapers decreased between 1967 and 1968, while local newspaper advertising revenues increased in this same period. The Television advertising hadn't appeared in 1967, but it turned to have a similar total advertising revenues as that of national daily newspapers by 1974. 
+
+# Recreate Figure 3
+The figure shows, by year 1967 and 1974, the share of total advertising revenues. (national daily newspapers, local daily newspapers, magazines, television, radio, cinema, outdoor, and others).
+```{r Figure3}
+Figure3_data <- read_dta("116438-V1/dta/Angelucci_Cage_AEJMicro_Descriptive_evidence_advertising_industry.dta")
+
+# Plot bar ggplot
+Figure3_data %>%
+  select(-(adtotal:adother)) %>%
+  rename(`Local daily newspapers`= sharepqr,
+         `National daily newspapers`= sharepqn,
+         TV = sharetv,
+         Radio = shareradio,
+         Magazines = sharepresse_mag,
+         Outdoor = shareaffichage,
+         Cinema = sharecine,
+         Others = shareother) %>%
+  pivot_longer(-year, names_to = "Media", values_to = "Value") %>%
+  # fix order
+  mutate(Media = factor(Media, levels = unique(.$Media))) %>%
+  group_by(year) %>%
+  ggplot(aes("", Value , fill = Media)) +
+  geom_bar(stat="identity", width=1, color="white") +
+  coord_polar("y", start=0) +
+  facet_wrap(~ year) +
+  theme_void() + # remove background, grid, numeric labels
+  theme(legend.position = "bottom")
+```
+From these pie charts above, the share of national newspapers advertising obviously became thinner from 1967 to 1974, while the share of local newspapers advertising maintained. In 1974, the television advertising already had an important percentage in the advertising platforms. 
+
+# Recreate Figure 4
+Figure 4 series are comparing the advertisements in National Newspapers and on Television, in electronic devices and computer hardware area and OTC Drugs area. The author is telling that some advertisers would advertise exclusively on television, which had a huge impact on extensive margin for national newspapers. He takes computer hardware area and OTC Drugs area as examples, and draws four bar plots to compare their total number and share. 
+```{r Figure 4}
+Figure4_data <- read_dta("116438-V1/dta/Angelucci_Cage_AEJMicro_Descriptive_evidence_advertisement.dta")
+
+# Figure 4a
+Figure4_data %>%
+  ggplot(aes(x=factor(year))) +
+  geom_bar(aes(y = nb_PQN8, fill = "deepskyblue2", width = 0.4), stat = "identity") + 
+  geom_bar(aes(y= nb_TV8/9, fill = "red", width = 0.1), stat = "identity") + # Divide by 9 to get the same range
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Number of advertisements in national newspapers",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~.*9, name="Number of advertisements on TV")
+  ) + 
+  scale_fill_identity(name = "",
+                    breaks = c("deepskyblue2", "red"),
+                    labels = c("National newspapers (number)", "Television"),
+                    guide = "legend") +
+  labs(x = "year") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+
+# Figure 4b
+Figure4_data %>%
+  ggplot(aes(x=factor(year))) +
+  geom_bar(aes(y = share_PQN8, fill = "deepskyblue2", width = 0.4), stat = "identity") + 
+  geom_bar(aes(y= nb_TV8/8, fill = "red", width = 0.1), stat = "identity") + 
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Share of advertisements in national newspapers",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~.*9, name="Total Number of advertisements on TV")
+  ) + 
+  scale_fill_identity(name = "",
+                    breaks = c("deepskyblue2", "red"),
+                    labels = c("National newspapers (share)", "Television"),
+                    guide = "legend") +
+  labs(x = "year") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+
+# Figure 4c
+Figure4_data %>%
+  ggplot(aes(x=factor(year))) +
+  geom_bar(aes(y = nb_PQN22, fill = "deepskyblue2", width = 0.4), stat = "identity") + 
+  geom_bar(aes(y= nb_TV22/3.75, fill = "red", width = 0.1), stat = "identity") + 
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Number of advertisements in national newspapers",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~.*3.75, name="Number of advertisements on TV")
+  ) + 
+  scale_fill_identity(name = "",
+                    breaks = c("deepskyblue2", "red"),
+                    labels = c("National newspapers (number)", "Television"),
+                    guide = "legend") +
+  labs(x = "year") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+
+# Figure 4d
+Figure4_data %>%
+  ggplot(aes(x=factor(year))) +
+  geom_bar(aes(y = share_PQN22, fill = "deepskyblue2", width = 0.4), stat = "identity") + 
+  geom_bar(aes(y= nb_TV22/5, fill = "red", width = 0.1), stat = "identity") + 
+  scale_y_continuous(
+    # Features of the first axis
+    name = "Share of advertisements in National Newspapers",
+    # Add a second axis and specify its features
+    sec.axis = sec_axis(~.*5, name="Total Number of advertisements on TV")
+  ) + 
+  scale_fill_identity(name = "",
+                    breaks = c("deepskyblue2", "red"),
+                    labels = c("National newspapers (share)", "Television"),
+                    guide = "legend") +
+  labs(x = "year") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+```
+From the figures above, both the number and share of television advertising quickly exceed that of the national newspapers. The substitution pattern appears clearly in the two areas.
+
+# Recreate Figure 5
+One may be concerned that the extra revenues were used to increase the quality of television content and induce newspaper readers to stop reading. In this case, newspaper industry would be affected in other sides of the market. To address this concern, the author would like to prove that existing trends in television quality did not change around 1967–1968. The first three figures shows the the number of transmitters, the power of transmitters, and the number of hours broadcast verus the trend of three channels, setting a vline at 1967 when the introduction of the third channel. The forth graph shows the license-fees collected on all television set owners from 1962 to 1974. The fifth graph shows the journalists working for the ORTF.
+```{r Figure 5}
+Figure5_data <- read_dta("116438-V1/dta/Angelucci_Cage_AEJMicro_Descriptive_evidence_television_quality.dta")
+
+# Figure 5a
+Figure5_data %>%
+  ggplot(aes(x=year)) +
+  geom_line(aes(y = nb_transmitters_all, color = "blue")) + 
+  geom_line(aes(y=nb_transmitters_C1, color = "red"), linetype = "dashed") +
+  geom_line(aes(y=nb_transmitters_C2, color = "green"), linetype = "dashed") +
+  geom_line(aes(y=nb_transmitters_C3, color = "orange"), linetype = "dashed") +
+  geom_vline(xintercept = 1967, color = "red") +
+  scale_x_continuous(breaks = seq(1962, 1974, by=1)) +
+  scale_color_identity(name = "",
+                    breaks = c("blue", "red", "green", "orange"),
+                    labels = c("All", "First channel", "Second channel", "Third channel"),
+                    guide = "legend") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+
+# Figure 5b
+Figure5_data %>%
+  ggplot(aes(x=year)) +
+  geom_line(aes(y = power_transmitters_all, color = "blue")) + 
+  geom_line(aes(y=power_transmitters_C1, color = "red"), linetype = "dashed") +
+  geom_line(aes(y=power_transmitters_C2, color = "green"), linetype = "dashed") +
+  geom_line(aes(y=power_transmitters_C3, color = "orange"), linetype = "dashed") +
+  geom_vline(xintercept = 1967, color = "red") +
+  scale_x_continuous(breaks = seq(1962, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(0, 3000, by=500)) +
+  scale_color_identity(name = "",
+                    breaks = c("blue", "red", "green", "orange"),
+                    labels = c("All", "First channel", "Second channel", "Third channel"),
+                    guide = "legend") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+
+# Figure 5c
+Figure5_data %>%
+  ggplot(aes(x=year)) +
+  geom_line(aes(y = Durée_Totale_C1, color = "blue")) + 
+  geom_line(aes(y=Informations_C1, color = "red"), linetype = "dashed") +
+  geom_line(aes(y=Durée_Totale_C2, color = "green"), linetype = "dashed") +
+  geom_line(aes(y=Informations_C2, color = "orange"), linetype = "dashed") +
+  geom_vline(xintercept = 1967, color = "red") +
+  scale_x_continuous(breaks = seq(1962, 1971, by=1)) +
+  scale_y_continuous(breaks = seq(0, 4000, by=500)) +
+  scale_color_identity(name = "",
+                    breaks = c("blue", "red", "green", "orange"),
+                    labels = c("All", "First channel", "Second channel", "Third channel"),
+                    guide = "legend") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.position = "bottom")
+
+# Figure 5d
+Figure5_data %>%
+  filter(year >= 1962,
+         year <= 1974) %>%
+  ggplot(aes(x=year)) +
+  geom_line(aes(y = nb_redevances_total_ipo), color = "blue") + 
+  geom_vline(xintercept = 1967, color = "red") +
+  scale_x_continuous(breaks = seq(1962, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(3, 14, by=1)) +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+# Figure 5e
+Figure5_data %>%
+  filter(year >= 1960,
+         year <= 1974) %>%
+  select(year, journalistes) %>%
+  na.omit() %>%
+  ggplot(aes(x=year, y = journalistes)) +
+  geom_line(color = "blue") + 
+  geom_vline(xintercept = 1967, color = "red") +
+  theme_minimal() + 
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+From Figure 5c, the number of hours of programming broadcast is flat for the first channel during our period of interest, and increased linearly on the second channel. There was roughly no change in the number of hours of news broadcast. This pattern is also similar for Figure 5a and 5b. Though these might not be the best lenes, there is no sudden change occurring in 1967–1968. It also seems unlikely that the quality of television affected all the readers of national and local newspapers. Under the the assumption that the newspaper industry was only affected in the advertising side, the author could continue his study. 
+Figure 5d shows a linear increasing trend. Figure 5e shows that the number of journalists working for the ORTF increased linearly throughout the period, and such trend would be important in author's next section of study. 
+
+# Methodology
+After building several models in previous section, the author start to study empirically the size of newsrooms, the pricing, the readership and outcomes are affected by newspapers’ reliance on advertising revenues as the introduction of television. He uses panel data to compute DiD estimates of the effect of the introduction of advertising on television. He assumes that the negative shock on advertising revenues mostly affected national daily newspapers and to a lower extent local daily newspapers. He uses national newspapers as “treated group” and local newspapers as “control group. Here is the equation: 
+
+$$yn,t = α + β1(Dafter ×Dnational news) + λn + γt + εn,t $$
+n indexes newspapers and t indexes years (from 1960 to 1974). λn is fixed effects for newspaper, γt is time dummies, and εn,t is a newspaper-year shock. Dnationalnews is an indicator variable for national newspapers and Dafter is a time dummy that switches on for observations post 1967. The variable yn,t is the outcome of interest, while β1 is the coefficient of interest. β1 measures the annual effect for national newspapers of the introduction of advertising on television compared to the general evolution of  dependent variable for local newspapers. There is a key assumption for this method, such that the trends of the dependent variables would be the same for both newspapers in the absence of the treatment. 
+
+# Recreate Table 3-6
+Table 3-7 are showing the results using the above method. Table 3 is the effect on the advertising side of the market. Table 4 is the effect on the reader side of the market. Table 5 is the effect on the newspaper quality. Table 6 is the effect on readership extent. 
+```{r table3}
+
+# create a function for the regression and produce the table
+panel_reg <- function(x, data) {
+  # x is a list of variables for the regression
+  result1 <- formula(paste(x, " ~ after_national + factor(year)")) %>%
+    plm(data = data,
+        effect = "individual", index = c("id_news","year"), model = "within")
+  
+  result1_table <- data.frame(rbind(`National x Post-TV Ad` = summary(result1)$coefficients[1,1] %>% round(2),
+                                    SE = result1 %>% coeftest(vcovHC) %>% .[1,2] %>% round(2),
+                                    `Newspaper FE` = "Yes",
+                                    `Year FE` = "Yes",
+                                    Rsq = summary(result1)$r.squared[1] %>% round(2),
+                                    Adjrsq = (1-(1-summary(result1)$r.squared[1])*(summary(result1)$residuals %>% length()-1)/(summary(result1)$residuals %>% length()- summary(result1)$df[1] - 1)) %>% round(2),
+                                    Observations = summary(result1)$residuals %>% length()))
+  names(result1_table) = x
+  return(result1_table)
+}
+
+# Table 3—Advertising Side regression for ln_ra_cst2 ln_ads_p1_cst2 ln_ads_p4_cst ln_ads_q
+cbind(panel_reg("ln_ra_cst2", data),
+      panel_reg("ln_ads_p1_cst2", data),
+      panel_reg("ln_ads_p4_cst", data),
+      panel_reg("ln_ads_q", data)) %>%
+  kable(align = "c", caption = "Table 3—Advertising Side") %>%
+        kable_styling("striped", full_width = F)
+
+# Table 4—Reader Side regression
+cbind(panel_reg("ln_ps_cst", data),
+      panel_reg("ln_po_cst", data),
+      panel_reg("ln_qtotal", data),
+      panel_reg("ln_qs_s", data),
+      panel_reg("ln_rs_cst", data)) %>%
+   kable(align = "c", caption = "Table 4—Reader Side") %>%
+        kable_styling("striped", full_width = F)
+
+# Table 5—quality
+cbind(panel_reg("ln_nb_journ", data),
+      panel_reg("ln_av_payroll_cst", data),
+      panel_reg("ln_pages", data),
+      panel_reg("ln_news_hole", data),
+      panel_reg("ln_share_Hard", data)) %>%
+  kable(align = "c", caption = "Table 5—Quality") %>%
+        kable_styling("striped", full_width = F)
+
+# Table 6a Readership
+cbind(panel_reg("R_sh_edu_no_ipo", data),
+      panel_reg("R_sh_edu_primaire_ipo", data),
+      panel_reg("R_sh_edu_secondaire_ipo", data),
+      panel_reg("R_sh_edu_sup_prof_ipo", data)) %>%
+  kable(align = "c", caption = "Table 6a—Readership") %>%
+        kable_styling("striped", full_width = F)
+
+# Table 6b Readership
+cbind(panel_reg("R_sh_pcs_agri_ipo", data),
+      panel_reg("R_sh_pcs_patron_ipo", data),
+      panel_reg("R_sh_pcs_cadre_ipo", data),
+      panel_reg("R_sh_pcs_employes_ipo", data),
+      panel_reg("R_sh_pcs_ouvriers_ipo", data),
+      panel_reg("R_sh_pcs_inactifs_ipo", data)) %>%
+  kable(align = "c", caption = "Table 6b—Readership") %>%
+        kable_styling("striped", full_width = F)
+```
+Table 3 shows that the shock leads to a 24 percent decrease in the advertising revenues of national newspapers compared to the revenues of local newspapers. It also obtain a 14 percent decrease following the shock when using the total advertising revenues normalized by circulation; the decrease would be stronger when considering the list price measure of advertising prices. However, there is no significant change in the quantity of advertising.
+
+Table 4 shows the advertising revenues affected newspapers’ pricing choices and their circulation. There is an 11 percent decrease in the subscription price of national newspapers compared to the subscription price of local newspapers following the introduction of advertising on television.
+
+Two features of newspapers are used in this study as measures of newspaper quality: the number of journalists (newshole) and the payroll. As shown in Table 5, advertising on television leads to a 21 percent decrease in the number of journalists and no effect on the average payroll.
+
+According to Table 6, following the collapse in advertising revenues and readjustment of content and prices, national newspapers switched to a less-educated and affluent readership relative to local newspapers, with fewer educated readers and white-collar workers as well as more blue-collar workers and farmers.
+
+# Recreate Table 7
+Table 7 is the heterogeneity of effects and reliance on advertising revenues. The author assumes that newspapers that were not depending a lot on advertising revenues would experience less shock than whose reliance was high. The threshold is defined using the median of the share of advertising in total revenues in 1966. 
+```{r Tabel7}
+# Table 7— Heterogenous Effects: Reliance on Advertising of National Daily Newspapers before the Shock for ln_ra_cst ln_ads_p4_cst ln_ps_cst ln_qs_s ln_nb_journ ln_news_hole for groups Had==1 & national==1 and Had==0 & national==1
+cbind(panel_reg("ln_ra_cst", (data %>% filter(!(Had==1 & national==1)))),
+      panel_reg("ln_ads_p4_cst", (data %>% filter(!(Had==1 & national==1)))),
+      panel_reg("ln_ps_cst", (data %>% filter(!(Had==1 & national==1)))),
+      panel_reg("ln_qs_s", (data %>% filter(!(Had==1 & national==1)))),
+      panel_reg("ln_nb_journ", (data %>% filter(!(Had==1 & national==1)))),
+      panel_reg("ln_news_hole", (data %>% filter(!(Had==1 & national==1)))),
+      panel_reg("ln_ra_cst", (data %>% filter(!(Had==0 & national==1)))),
+      panel_reg("ln_ads_p4_cst", (data %>% filter(!(Had==0 & national==1)))),
+      panel_reg("ln_ps_cst", (data %>% filter(!(Had==0 & national==1)))),
+      panel_reg("ln_qs_s", (data %>% filter(!(Had==0 & national==1)))),
+      panel_reg("ln_nb_journ", (data %>% filter(!(Had==0 & national==1)))),
+      panel_reg("ln_news_hole", (data %>% filter(!(Had==0 & national==1))))) %>%
+  kable(align = "c", caption = "Table 7— Heterogenous Effects: Reliance on Advertising of National Daily Newspapers before the Shock") %>%
+  kable_styling("striped", full_width = F) %>%
+  # Add header above
+  add_header_above(c(" " = 1, "Low" = 6, "High" = 6))
+```
+
+
+## Recreate Figure 6
+The author interacts the year fixed effects with the national newspapers indicator variable.  Figure 6 series presents the results for outcome variables of interest.
+```{r}
+# Run regression again for year*national
+result1 <- formula(ln_ra_cst ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result1 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result1 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel A. Advertising revenues")
+
+
+result2 <- formula(ln_ads_p4_cst ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result2 %>%
+  coeftest(vcovHC) %>%
+  .[13:24,] %>%
+  cbind(result2 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[13:24,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1963:1974) %>%
+  rbind(c(0,0,0,1962)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1962, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel B. Advertising price")
+
+result3 <- formula(ln_ps_cst ~ year*national) %>%
+  plm(data = data,
+      effect = "individual", index = c("id_news","year"), model = "within")
+
+result3 %>%
+  coeftest(vcovHC) %>%
+  .[15:28,] %>%
+  cbind(result3 %>%
+          coeftest(vcovHC) %>%
+          confint(level = 0.9) %>%
+          .[15:28,]) %>%
+  .[, c("Estimate", "5 %", "95 %")] %>%
+  as_tibble() %>%
+  mutate(year = 1961:1974) %>%
+  rbind(c(0,0,0,1960)) %>%
+  # plot the points with error bar
+  ggplot(aes(x = year)) +
+  geom_point(aes(y = Estimate)) + 
+  scale_x_continuous(breaks = seq(1960, 1974, by=1)) +
+  scale_y_continuous(breaks = seq(-1, 0.2, by=0.1)) +
+  geom_errorbar(aes(ymin = `5 %`,
+                    ymax = `95 %`)) +
+  geom_vline(xintercept = 1966.5, color = "red") +
+  geom_hline(yintercept = 0, color = "red") +
+  labs(title = "Panel C. Subscription price")
+
+
+```
+From all these boxplots, there are obvious decrease of median for Advertising revenues, Advertising price, Subscription price, Number of journalists, and Readership: Percent employees. There is no significant change of median for Circulation and Newshole. And there is an increase of median in Readership: Percent farmers and laborers. It is interesting that there is a decrease in the number of journalists employed, but no change in the quantity of news. There comes to an induction that national newspapers drop in advertising revenues by decreasing the quality of content or by producing fewer hard news. 
+
+# Discussion
+In this paper reproduction study, I successfully rebuild all the tables and figures that the author made. Though there exist small differences, I could still reach the similar conclusion as the author's. 
+
+The newspaper industry is in a severe crisis following the advent of new media. An obvious challenge is that less advertisers would choose to cooperate with newspapers, comparing to the strong publicity capacity of new media. A drop in advertising revenues induces the newspaper to lower the quality of content, a decrease in the subscription price, or changes the composition of the readership. It is also shown that the introduction of advertising of television leads to the decrease in the number of journalists employed. Under the vicious spiral of fewer journalists employed - lower quality of content - fewer readers - fewer inverstments, the traditional newspaper industry would disappear in the future. 
+
+However, there are still some weakness in this study. Figure 1 may be not good enough. As newspaper advertising revenues and number of daily newspaper journalists actually have different units, they should not be simply put together. Also, some of the lenes are not authoritative enough, such as the measurements of newspaper content quality, which need us to search for more information.
+
+# Reference
+[1]Angelucci, Charles, and Julia Cagé. 2019. "Newspapers in Times of Low Advertising Revenues." American Economic Journal: Microeconomics, 11 (3): 319- 64. Available at:
+<DOI: 10.1257/mic.20170306>
